@@ -1,0 +1,76 @@
+---
+title: "Formal reponse to Gonzalez-Voyer et al. (2026): Robust model comparison and tests of interactions in phylogenetic path analysis"
+author: "Dylan Padilla <br> (dylan.padilla@yale.edu)"
+institute: "Yale School of the Environment <br> Yale University <br> New Haven, CT 06511"
+engine: knitr
+format:
+  html:
+    code-fold: false
+---
+
+
+```{r, warning="FALSE", comment="", message=""}
+
+## Libraries
+library(ape)
+library(phytools)
+library(phylopath)
+library(nlme)
+
+## Setting seed for data reproducibility
+set.seed(5968)
+
+# Simulating tree and trait data
+n_species <- 30
+tree <- compute.brlen(rtree(n_species))
+
+Body_mass <- fastBM(tree)
+Endothermy <- fastBM(tree)
+Telomere_length <- 0.6 * Body_mass + fastBM(tree, sig2 = 0.5)
+Lifespan <- 0.8 * Body_mass + fastBM(tree, sig2 = 0.5)
+
+df <- data.frame(
+  Body_mass = Body_mass,
+  Telomere_length = Telomere_length,
+  Lifespan = Lifespan,
+  Endothermy = Endothermy,
+  row.names = tree$tip.label
+)
+
+# Defining model DAG
+model_seven <- DAG(
+  Telomere_length ~ Body_mass,
+  Lifespan ~ Body_mass,
+  Endothermy ~ 1
+)
+
+# Fitting model with phylopath
+res <- phylo_path(
+  model_set = list(model_seven = model_seven),
+  data = df,
+  tree = tree,
+  model = "BM"
+)
+
+# Extracting unstandardized estimates
+fit_path <- choice(res, "model_seven", standard = "none")
+cat("PHYLOPATH RESULTS \n")
+print(fit_path$coef)
+
+# Reproducing phylopath results with nlme::gls
+df$species <- rownames(df)
+pgls_telomere <- gls(
+  Telomere_length ~ Body_mass,
+  data = df,
+  correlation = corBrownian(1, phy = tree, form = ~species)
+)
+pgls_lifespan <- gls(
+  Lifespan ~ Body_mass,
+  data = df,
+  correlation = corBrownian(1, phy = tree, form = ~species)
+)
+cat("\nDIRECT GLS RESULTS: Telomere_length ~ Body_mass \n")
+print(summary(pgls_telomere)$tTable)
+cat("\nDIRECT GLS RESULTS: Lifespan ~ Body_mass \n")
+print(summary(pgls_lifespan)$tTable)
+```
